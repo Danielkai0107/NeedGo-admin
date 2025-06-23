@@ -155,7 +155,31 @@ function updateField(key, value) {
   }
 }
 
-function selectPlace(place) {
+async function reverseGeocode(lat, lng) {
+  return new Promise((resolve) => {
+    if (!window.google?.maps) {
+      console.warn("Google Maps API 未載入");
+      resolve(null);
+      return;
+    }
+
+    const geocoder = new google.maps.Geocoder();
+    const latLng = new google.maps.LatLng(lat, lng);
+
+    geocoder.geocode({ location: latLng }, (results, status) => {
+      if (status === google.maps.GeocoderStatus.OK && results[0]) {
+        const address = results[0].formatted_address;
+        console.log("反向地理編碼取得地址:", address);
+        resolve(address);
+      } else {
+        console.warn("反向地理編碼失敗:", status);
+        resolve(null);
+      }
+    });
+  });
+}
+
+async function selectPlace(place) {
   selecting.value = true;
   updateField("name", place.name || place.description);
   placeSuggestions.value = [];
@@ -170,28 +194,40 @@ function selectPlace(place) {
     service.getDetails(
       {
         placeId: place.place_id,
-        fields: ["geometry", "types"],
+        fields: ["geometry", "types", "formatted_address"],
       },
-      (placeDetails, status) => {
-        console.log("API 回應狀態:", status); // 除錯用
-        console.log("地點詳細資訊:", placeDetails); // 除錯用
+      async (placeDetails, status) => {
+        console.log("API 回應狀態:", status);
+        console.log("地點詳細資訊:", placeDetails);
 
         if (
           status === google.maps.places.PlacesServiceStatus.OK &&
           placeDetails
         ) {
-          // 準備要更新的資料物件
           const updateData = { ...props.locationData };
 
           // 更新經緯度
           if (placeDetails.geometry && placeDetails.geometry.location) {
             const lat = placeDetails.geometry.location.lat();
             const lng = placeDetails.geometry.location.lng();
-            console.log("取得座標:", lat, lng); // 除錯用
+            console.log("取得座標:", lat, lng);
             updateData.lat = lat;
             updateData.lng = lng;
-          } else {
-            console.warn("沒有座標資訊");
+          }
+
+          // 更新地址
+          if (placeDetails.formatted_address) {
+            updateData.address = placeDetails.formatted_address;
+            console.log("取得地址:", placeDetails.formatted_address);
+          } else if (updateData.lat && updateData.lng) {
+            // 如果沒有 formatted_address，使用反向地理編碼
+            const address = await reverseGeocode(
+              updateData.lat,
+              updateData.lng
+            );
+            if (address) {
+              updateData.address = address;
+            }
           }
 
           // 更新分類
@@ -212,12 +248,6 @@ function selectPlace(place) {
     );
   } else {
     console.warn("Google Maps API 未載入或沒有 place_id");
-    console.log("Google Maps 狀態:", {
-      google: typeof google !== "undefined",
-      maps: window.google?.maps,
-      places: window.google?.maps?.places,
-      place_id: place.place_id,
-    });
     selecting.value = false;
   }
 }
@@ -308,218 +338,3 @@ onUnmounted(() => {
   }
 });
 </script>
-
-<style scoped>
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: white;
-  border-radius: 12px;
-  width: 90%;
-  max-width: 500px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.15);
-}
-
-.modal-header {
-  padding: 24px 24px 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.modal-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: #2c3e50;
-}
-
-.modal-close {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: #7f8c8d;
-  padding: 0;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: all 0.2s;
-}
-
-.modal-close:hover {
-  background: #ecf0f1;
-  color: #2c3e50;
-}
-
-.modal-form {
-  padding: 24px;
-}
-
-.form-group {
-  margin-bottom: 20px;
-}
-
-.form-label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-  color: #2c3e50;
-  font-size: 14px;
-}
-
-.form-input,
-.form-select {
-  width: 100%;
-  padding: 12px 16px;
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
-  font-size: 14px;
-  transition: all 0.2s;
-  box-sizing: border-box;
-}
-
-.form-input:focus,
-.form-select:focus {
-  outline: none;
-  border-color: #3498db;
-  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
-}
-
-.form-select {
-  background: white;
-  cursor: pointer;
-}
-
-.autocomplete-container {
-  position: relative;
-}
-
-.suggestions-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  background: white;
-  border: 2px solid #e0e0e0;
-  border-top: none;
-  border-radius: 0 0 8px 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  z-index: 1001;
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.suggestion-item {
-  padding: 12px 16px;
-  cursor: pointer;
-  border-bottom: 1px solid #f5f5f5;
-  transition: background-color 0.2s;
-}
-
-.suggestion-item:hover {
-  background-color: #f8f9fa;
-}
-
-.suggestion-item:last-child {
-  border-bottom: none;
-}
-
-.suggestion-name {
-  font-weight: 500;
-  color: #2c3e50;
-  margin-bottom: 4px;
-}
-
-.suggestion-address {
-  font-size: 12px;
-  color: #7f8c8d;
-}
-
-.coords-info {
-  margin-bottom: 20px;
-  padding: 12px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  border-left: 4px solid #3498db;
-}
-
-.coords-text {
-  color: #7f8c8d;
-  font-size: 13px;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 12px;
-  justify-content: flex-end;
-  margin-top: 24px;
-}
-
-.btn-secondary,
-.btn-primary {
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: none;
-}
-
-.btn-secondary {
-  background: #ecf0f1;
-  color: #2c3e50;
-}
-
-.btn-secondary:hover {
-  background: #d5dbdb;
-}
-
-.btn-primary {
-  background: #3498db;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #2980b9;
-}
-
-.btn-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.3s;
-}
-
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-
-@media (max-width: 600px) {
-  .modal-content {
-    width: 95%;
-    margin: 20px;
-  }
-}
-</style>
