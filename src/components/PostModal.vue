@@ -1,3 +1,5 @@
+<!-- PostModal.vue -->
+
 <template>
   <!-- Bootstrap Modal -->
   <div
@@ -62,7 +64,7 @@
                   />
                   <!-- 搜尋建議下拉選單 -->
                   <div
-                    v-if="addressSuggestions && addressSuggestions.length > 0"
+                    v-if="addressSuggestions.length > 0"
                     class="position-absolute w-100 bg-white border border-top-0 rounded-bottom shadow-sm"
                     style="z-index: 1000; max-height: 200px; overflow-y: auto"
                   >
@@ -175,8 +177,9 @@ export default {
     updateField(key, value) {
       this.$emit("update:postForm", { ...this.postForm, [key]: value });
       if (key === "address" && !this.selecting) {
-        if (value && value.length > 2) {
-          this.searchAddresses(value);
+        if (value && value.trim().length > 2) {
+          // 添加 trim()
+          this.searchAddresses(value.trim());
         } else {
           this.addressSuggestions = [];
           // 清除座標當地址改變時
@@ -245,7 +248,6 @@ export default {
         this.selecting = false;
       }
     },
-
     searchAddresses(query) {
       if (
         typeof google === "undefined" ||
@@ -266,13 +268,17 @@ export default {
         const request = {
           input: query,
           componentRestrictions: { country: "tw" },
-          types: ["address", "establishment", "geocode"],
+          types: ["establishment", "geocode"], // 移除 "address"
         };
 
         service.getPlacePredictions(request, (predictions, status) => {
+          console.log("搜尋狀態:", status);
+          console.log("搜尋結果:", predictions);
+
           if (
             status === google.maps.places.PlacesServiceStatus.OK &&
-            predictions
+            predictions &&
+            predictions.length > 0
           ) {
             this.addressSuggestions = predictions
               .slice(0, 5)
@@ -286,6 +292,7 @@ export default {
                   prediction.structured_formatting?.secondary_text || "",
               }));
           } else {
+            console.warn("搜尋失敗或無結果:", status);
             this.addressSuggestions = [];
           }
         });
@@ -362,6 +369,12 @@ export default {
 
   mounted() {
     document.addEventListener("click", this.handleClickOutside);
+    // 檢查 Google Maps API 是否正確載入
+    console.log("Google Maps API 狀態:", {
+      google: typeof google !== "undefined",
+      maps: typeof google !== "undefined" && !!google.maps,
+      places: typeof google !== "undefined" && !!google.maps?.places,
+    });
   },
 
   unmounted() {

@@ -1,3 +1,5 @@
+<!-- LocationModal.vue -->
+
 <template>
   <!-- Bootstrap Modal -->
   <div
